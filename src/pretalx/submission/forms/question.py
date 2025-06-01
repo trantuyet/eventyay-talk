@@ -6,6 +6,12 @@ from pretalx.cfp.forms.cfp import CfPFormMixin
 from pretalx.common.forms.mixins import QuestionFieldsMixin
 from pretalx.submission.models import Question, QuestionTarget, QuestionVariant
 
+from nh3 import clean
+
+def sanitize_html(content):
+    allowed_tags = ['a']
+    cleaned_content = clean(content, tags=allowed_tags)
+    return cleaned_content
 
 class QuestionsForm(CfPFormMixin, QuestionFieldsMixin, forms.Form):
     def __init__(self, *args, **kwargs):
@@ -93,5 +99,10 @@ class QuestionsForm(CfPFormMixin, QuestionFieldsMixin, forms.Form):
         ]
 
     def save(self):
+        self.clean()  # Ensure clean is called before saving
+        # Sanitize question fields before saving
+        for key, value in self.cleaned_data.items():
+            if key.startswith('question_') and isinstance(value, str):
+                self.cleaned_data[key] = sanitize_html(value)
         for key, value in self.cleaned_data.items():
             self.save_questions(key, value)

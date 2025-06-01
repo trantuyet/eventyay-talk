@@ -10,6 +10,7 @@ from pretalx.common.models.mixins import OrderedModel, PretalxModel
 from pretalx.common.text.path import path_with_hash
 from pretalx.common.text.phrases import phrases
 from pretalx.common.urls import EventUrls
+from nh3 import clean
 
 
 def answer_file_path(instance, filename):
@@ -17,6 +18,11 @@ def answer_file_path(instance, filename):
         filename, base_path=f"{instance.question.event.slug}/question_uploads/"
     )
 
+def sanitize_html(content):
+    allowed_tags = ['a', 'br']
+    cleaned_content = clean(content, tags=allowed_tags)
+    print(f"[sanitize_html] input: {repr(content)} | output: {repr(cleaned_content)}")
+    return cleaned_content
 
 class QuestionManager(models.Manager):
     def get_queryset(self):
@@ -271,6 +277,21 @@ class Question(OrderedModel, PretalxModel):
     @property
     def read_only(self):
         return self.freeze_after and (self.freeze_after <= now())
+
+    @property
+    def sanitized_question(self):
+        """Return the question text sanitized to allow only <a> and <br> tags."""
+        return sanitize_html(str(self.question))
+
+    def save(self, *args, **kwargs):
+        # Sanitize all translations in the question field (I18nCharField)
+        if self.question:
+            if hasattr(self.question, 'data'):
+                for lang, text in self.question.data.items():
+                    self.question.data[lang] = sanitize_html(text)
+            else:
+                self.question = sanitize_html(self.question)
+        super().save(*args, **kwargs)
 
     class urls(EventUrls):
         base = "{self.event.cfp.urls.questions}{self.pk}/"
